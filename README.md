@@ -9,19 +9,15 @@ storage — nothing ever leaves your device.
 
 ## Get it on your iPhone (one-time setup)
 
-The app needs to be served over HTTPS once so Safari can install it. The easiest
-free option is GitHub Pages:
+The app is served free over HTTPS by GitHub Pages. A workflow in this repo
+already publishes the app to the `gh-pages` branch on every push; Pages just has
+to be switched on once:
 
-1. **Make this repo public** (Settings → General → Danger Zone → Change visibility).
-   This is safe: the repo only contains the app's code. Your recipes and lists are
-   stored on your phone and are never in the repo.
-   *(GitHub Pages is paid-only for private repos — if you'd rather keep it private,
-   any free static host works: drop `index.html`, `sw.js`, and `icon.png` into
-   Cloudflare Pages or Netlify's free tier instead.)*
-2. **Enable Pages**: Settings → Pages → "Deploy from a branch" → pick your branch,
-   folder `/ (root)` → Save. After a minute your app is at
+1. **Enable Pages** (repo owner only): Settings → Pages → under "Build and
+   deployment" choose Source: "Deploy from a branch" → branch `gh-pages`,
+   folder `/ (root)` → Save. After a minute the app is at
    `https://<your-username>.github.io/Groceries/`.
-3. **On your iPhone**: open that URL in Safari, tap the Share button, then
+2. **On your iPhone**: open that URL in Safari, tap the Share button, then
    **Add to Home Screen**. It now opens full-screen like a native app, works
    offline in the store, and — important — home-screen apps are exempt from
    Safari's periodic storage cleanup, so your data stays put.
