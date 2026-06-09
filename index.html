@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Groceries">
+<meta name="theme-color" content="#2f9e44">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<title>Groceries</title>
+<style>
+:root {
+  --accent: #2f9e44;
+  --accent-soft: #e6f4ea;
+  --bg: #f6f7f8;
+  --card: #ffffff;
+  --text: #1c1f23;
+  --muted: #6b7280;
+  --line: #e3e6ea;
+  --danger: #c0392b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: #4cc764;
+    --accent-soft: #1e2f23;
+    --bg: #131517;
+    --card: #1e2125;
+    --text: #eceff2;
+    --muted: #9aa3ad;
+    --line: #32373d;
+    --danger: #e0604f;
+  }
+}
+* { box-sizing: border-box; margin: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: -apple-system, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+header {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: calc(env(safe-area-inset-top) + 12px) 16px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+header h1 { font-size: 22px; }
+main {
+  padding: 16px 16px calc(env(safe-area-inset-bottom) + 92px);
+  max-width: 640px; margin: 0 auto;
+}
+nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 5;
+  display: flex;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+nav button {
+  flex: 1; padding: 10px 0 8px;
+  background: none; border: none;
+  font-size: 22px; color: var(--muted);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+nav button span { font-size: 11px; font-weight: 600; }
+nav button.active { color: var(--accent); }
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.card.tappable { cursor: pointer; }
+.card h3 { font-size: 17px; }
+.sub { color: var(--muted); font-size: 14px; margin-top: 2px; }
+button.primary, button.secondary, button.danger-btn {
+  display: block; width: 100%;
+  padding: 14px; margin-top: 12px;
+  border-radius: 12px; border: none;
+  font-size: 17px; font-weight: 600;
+  cursor: pointer;
+}
+button.primary { background: var(--accent); color: #fff; }
+button.secondary { background: var(--accent-soft); color: var(--accent); }
+button.danger-btn { background: none; color: var(--danger); }
+button.ghost {
+  background: none; border: none;
+  font-size: 15px; font-weight: 600; color: var(--accent);
+  padding: 6px 4px; cursor: pointer;
+}
+input, select, textarea {
+  font: inherit; font-size: 16px;
+  color: var(--text); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; width: 100%;
+}
+label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 12px 0 4px; }
+.empty { text-align: center; color: var(--muted); padding: 40px 16px; font-size: 15px; line-height: 1.5; }
+.empty .big { font-size: 40px; display: block; margin-bottom: 8px; }
+
+/* recipe form ingredient rows */
+.ing-row {
+  display: grid;
+  grid-template-columns: 62px 80px 1fr;
+  gap: 6px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.ing-row .row2 { grid-column: 1 / -1; display: flex; gap: 6px; }
+.ing-row .row2 select { flex: 1; }
+.ing-row .row2 button {
+  background: none; border: none; color: var(--danger);
+  font-size: 20px; padding: 0 12px; cursor: pointer;
+}
+
+/* plan */
+.day h2 { font-size: 15px; color: var(--muted); margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+.meal { display: flex; align-items: center; gap: 10px; }
+.meal .name { flex: 1; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.stepper { display: flex; align-items: center; gap: 2px; }
+.stepper button {
+  width: 38px; height: 38px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg);
+  color: var(--accent); font-size: 20px; cursor: pointer;
+}
+.stepper .count { min-width: 30px; text-align: center; font-size: 14px; color: var(--muted); }
+.meal .remove { background: none; border: none; color: var(--muted); font-size: 20px; padding: 4px 0 4px 8px; cursor: pointer; }
+.addmeal {
+  display: block; width: 100%;
+  padding: 12px; border-radius: 12px;
+  border: 1.5px dashed var(--line); background: none;
+  color: var(--accent); font-size: 15px; font-weight: 600; cursor: pointer;
+}
+
+/* grocery list */
+.section h2 {
+  font-size: 14px; color: var(--accent);
+  margin: 18px 0 6px; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 14px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; margin-bottom: 6px;
+  cursor: pointer; -webkit-user-select: none; user-select: none;
+}
+.item .box {
+  width: 24px; height: 24px; flex-shrink: 0;
+  border: 2px solid var(--muted); border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 15px;
+}
+.item.done .box { background: var(--accent); border-color: var(--accent); }
+.item.done .label { text-decoration: line-through; color: var(--muted); }
+.item .qty { font-weight: 700; margin-right: 4px; }
+.progress { font-size: 14px; color: var(--muted); margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="page-title">Recipes</h1>
+  <button class="ghost" onclick="go('backup')">Backup</button>
+</header>
+<main id="main"></main>
+<nav>
+  <button id="tab-recipes" onclick="go('recipes')">📖<span>Recipes</span></button>
+  <button id="tab-plan" onclick="go('plan')">📅<span>Plan</span></button>
+  <button id="tab-list" onclick="go('list')">🛒<span>List</span></button>
+</nav>
+<datalist id="units">
+  <option value="g"><option value="kg"><option value="ml"><option value="l">
+  <option value="cup"><option value="tbsp"><option value="tsp"><option value="oz">
+  <option value="lb"><option value="can"><option value="bunch"><option value="clove">
+</datalist>
+
+<script>
+"use strict";
+
+// ---------- data ----------
+const STORE_KEY = "groceries.v1";
+const SECTIONS = [
+  ["produce", "Produce"],
+  ["meat", "Meat & Seafood"],
+  ["dairy", "Dairy & Eggs"],
+  ["bakery", "Bakery"],
+  ["pantry", "Pantry"],
+  ["frozen", "Frozen"],
+  ["other", "Other"],
+];
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (Array.isArray(d.recipes) && Array.isArray(d.plan)) {
+        d.checked = d.checked || {};
+        return d;
+      }
+    }
+  } catch (e) { /* corrupted storage: fall through to a fresh start */ }
+  return { recipes: [], plan: [], checked: {} };
+}
+
+function save() {
+  localStorage.setItem(STORE_KEY, JSON.stringify(data));
+}
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+let data = load();
+let view = "recipes";
+let editingId = null;  // recipe id when editing, null when creating
+let pickDay = 0;       // day index the recipe picker is adding to
+
+// ---------- quantities ----------
+// Accepts "1.5", "1,5", "1/2", "1 1/2". Returns a number or null.
+function parseQty(s) {
+  s = (s || "").trim().replace(",", ".");
+  if (!s) return null;
+  let m = s.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+  if (m) return +m[1] + (+m[2]) / (+m[3]);
+  m = s.match(/^(\d+)\/(\d+)$/);
+  if (m) return (+m[1]) / (+m[2]);
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+const FRACTIONS = [[0.25, "¼"], [1 / 3, "⅓"], [0.5, "½"], [2 / 3, "⅔"], [0.75, "¾"]];
+
+function formatQty(n) {
+  if (n == null) return "";
+  const whole = Math.floor(n + 1e-9);
+  const frac = n - whole;
+  if (frac < 0.02) return String(whole);
+  for (const [v, ch] of FRACTIONS) {
+    if (Math.abs(frac - v) < 0.02) return whole ? whole + " " + ch : ch;
+  }
+  return String(+n.toFixed(2));
+}
+
+// ---------- grocery list ----------
+// Merges all planned ingredients by (name, unit), scaled by servings.
+// Returns [[sectionLabel, items], ...] in store-walk order.
+function buildList() {
+  const map = new Map();
+  for (const meal of data.plan) {
+    const r = data.recipes.find((x) => x.id === meal.recipeId);
+    if (!r) continue;
+    const scale = r.servings > 0 ? meal.servings / r.servings : 1;
+    for (const ing of r.ingredients) {
+      const key = ing.name.trim().toLowerCase() + "|" + (ing.unit || "").trim().toLowerCase();
+      let e = map.get(key);
+      if (!e) {
+        e = { key, name: ing.name.trim(), unit: (ing.unit || "").trim(),
+              qty: 0, hasQty: false, unmeasured: false, section: ing.section || "other" };
+        map.set(key, e);
+      }
+      if (ing.qty != null) { e.qty += ing.qty * scale; e.hasQty = true; }
+      else e.unmeasured = true;
+    }
+  }
+  const groups = [];
+  for (const [secKey, secLabel] of SECTIONS) {
+    const items = [...map.values()]
+      .filter((e) => e.section === secKey)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (items.length) groups.push([secLabel, items]);
+  }
+  return groups;
+}
+
+// ---------- rendering ----------
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function go(v, day) {
+  view = v;
+  if (day !== undefined) pickDay = day;
+  render();
+  window.scrollTo(0, 0);
+}
+
+function render() {
+  const main = document.getElementById("main");
+  const titles = { recipes: "Recipes", form: editingId ? "Edit recipe" : "New recipe",
+                   plan: "This week", pick: "Add to " + DAYS[pickDay],
+                   list: "Grocery list", backup: "Backup" };
+  document.getElementById("page-title").textContent = titles[view];
+  for (const t of ["recipes", "plan", "list"]) {
+    document.getElementById("tab-" + t).classList.toggle(
+      "active", view === t || (view === "form" && t === "recipes") || (view === "pick" && t === "plan"));
+  }
+  if (view === "recipes") main.innerHTML = renderRecipes();
+  else if (view === "form") renderForm(main);
+  else if (view === "plan") main.innerHTML = renderPlan();
+  else if (view === "pick") main.innerHTML = renderPick();
+  else if (view === "list") main.innerHTML = renderList();
+  else if (view === "backup") main.innerHTML = renderBackup();
+}
+
+// ----- recipes -----
+function renderRecipes() {
+  let html = `<button class="primary" style="margin:0 0 16px" onclick="openForm(null)">＋ New recipe</button>`;
+  if (!data.recipes.length) {
+    return html + `<div class="empty"><span class="big">📖</span>
+      No recipes yet.<br>Add your first one and it will show up here.</div>`;
+  }
+  const sorted = [...data.recipes].sort((a, b) => a.name.localeCompare(b.name));
+  for (const r of sorted) {
+    html += `<div class="card tappable" onclick="openForm('${r.id}')">
+      <h3>${esc(r.name)}</h3>
+      <div class="sub">Serves ${r.servings} · ${r.ingredients.length} ingredient${r.ingredients.length === 1 ? "" : "s"}</div>
+    </div>`;
+  }
+  return html;
+}
+
+function openForm(id) {
+  editingId = id;
+  go("form");
+}
+
+function sectionOptions(selected) {
+  return SECTIONS.map(([k, label]) =>
+    `<option value="${k}"${k === selected ? " selected" : ""}>${label}</option>`).join("");
+}
+
+function renderForm(main) {
+  const r = editingId
+    ? data.recipes.find((x) => x.id === editingId)
+    : { name: "", servings: 2, notes: "", ingredients: [] };
+  main.innerHTML = `
+    <label>Recipe name</label>
+    <input id="f-name" value="${esc(r.name)}" placeholder="Lentil soup" autocapitalize="sentences">
+    <label>Servings this recipe makes</label>
+    <input id="f-servings" inputmode="numeric" value="${r.servings}">
+    <label>Ingredients (amount · unit · name)</label>
+    <div id="f-ings"></div>
+    <button class="secondary" onclick="addIngRow()">＋ Ingredient</button>
+    <label>Notes (optional)</label>
+    <textarea id="f-notes" rows="3" placeholder="Method, page number, tweaks…">${esc(r.notes || "")}</textarea>
+    <button class="primary" onclick="saveRecipe()">Save recipe</button>
+    <button class="secondary" onclick="go('recipes')">Cancel</button>
+    ${editingId ? `<button class="danger-btn" onclick="deleteRecipe()">Delete recipe</button>` : ""}`;
+  for (const ing of r.ingredients) addIngRow(ing);
+  if (!r.ingredients.length) addIngRow();
+}
+
+function addIngRow(ing) {
+  ing = ing || { qty: null, unit: "", name: "", section: "other" };
+  const row = document.createElement("div");
+  row.className = "ing-row";
+  row.innerHTML = `
+    <input class="i-qty" inputmode="decimal" placeholder="1 ½" value="${esc(formatQty(ing.qty))}">
+    <input class="i-unit" placeholder="cup" list="units" autocapitalize="none" value="${esc(ing.unit)}">
+    <input class="i-name" placeholder="ingredient" autocapitalize="none" value="${esc(ing.name)}">
+    <div class="row2">
+      <select class="i-sec">${sectionOptions(ing.section)}</select>
+      <button onclick="this.closest('.ing-row').remove()" aria-label="Remove ingredient">✕</button>
+    </div>`;
+  document.getElementById("f-ings").appendChild(row);
+}
+
+function saveRecipe() {
+  const name = document.getElementById("f-name").value.trim();
+  if (!name) { alert("Give the recipe a name first."); return; }
+  const servings = Math.max(1, parseInt(document.getElementById("f-servings").value, 10) || 1);
+  const ingredients = [];
+  for (const row of document.querySelectorAll(".ing-row")) {
+    const ingName = row.querySelector(".i-name").value.trim();
+    if (!ingName) continue;
+    ingredients.push({
+      qty: parseQty(row.querySelector(".i-qty").value),
+      unit: row.querySelector(".i-unit").value.trim(),
+      name: ingName,
+      section: row.querySelector(".i-sec").value,
+    });
+  }
+  const notes = document.getElementById("f-notes").value.trim();
+  if (editingId) {
+    Object.assign(data.recipes.find((x) => x.id === editingId), { name, servings, notes, ingredients });
+  } else {
+    data.recipes.push({ id: uid(), name, servings, notes, ingredients });
+  }
+  save();
+  go("recipes");
+}
+
+function deleteRecipe() {
+  const r = data.recipes.find((x) => x.id === editingId);
+  if (!confirm(`Delete “${r.name}”? This also removes it from this week's plan.`)) return;
+  data.recipes = data.recipes.filter((x) => x.id !== editingId);
+  data.plan = data.plan.filter((m) => m.recipeId !== editingId);
+  save();
+  go("recipes");
+}
+
+// ----- plan -----
+function renderPlan() {
+  let html = "";
+  if (!data.recipes.length) {
+    return `<div class="empty"><span class="big">📅</span>
+      Add a recipe first, then plan your week here.</div>`;
+  }
+  for (let d = 0; d < 7; d++) {
+    const meals = data.plan.filter((m) => m.day === d);
+    html += `<div class="day"><h2>${DAYS[d]}</h2>`;
+    for (const m of meals) {
+      const r = data.recipes.find((x) => x.id === m.recipeId);
+      if (!r) continue;
+      html += `<div class="card meal">
+        <div class="name">${esc(r.name)}</div>
+        <div class="stepper">
+          <button onclick="bumpServings('${m.id}',-1)">−</button>
+          <div class="count">${m.servings}<br>srv</div>
+          <button onclick="bumpServings('${m.id}',1)">＋</button>
+        </div>
+        <button class="remove" onclick="removeMeal('${m.id}')">✕</button>
+      </div>`;
+    }
+    html += `<button class="addmeal" onclick="go('pick',${d})">＋ Add meal</button></div>`;
+  }
+  if (data.plan.length) {
+    html += `<button class="danger-btn" onclick="clearWeek()">Clear the whole week</button>`;
+  }
+  return html;
+}
+
+function bumpServings(id, delta) {
+  const m = data.plan.find((x) => x.id === id);
+  m.servings = Math.max(1, m.servings + delta);
+  save();
+  render();
+}
+
+function removeMeal(id) {
+  data.plan = data.plan.filter((x) => x.id !== id);
+  save();
+  render();
+}
+
+function clearWeek() {
+  if (!confirm("Remove all planned meals and start the week fresh?")) return;
+  data.plan = [];
+  data.checked = {};
+  save();
+  render();
+}
+
+function renderPick() {
+  let html = "";
+  const sorted = [...data.recipes].sort((a, b) => a.name.localeCompare(b.name));
+  for (const r of sorted) {
+    html += `<div class="card tappable" onclick="addMeal('${r.id}')">
+      <h3>${esc(r.name)}</h3>
+      <div class="sub">Serves ${r.servings}</div>
+    </div>`;
+  }
+  html += `<button class="secondary" onclick="go('plan')">Cancel</button>`;
+  return html;
+}
+
+function addMeal(recipeId) {
+  const r = data.recipes.find((x) => x.id === recipeId);
+  data.plan.push({ id: uid(), day: pickDay, recipeId, servings: r.servings });
+  save();
+  go("plan");
+}
+
+// ----- grocery list -----
+function renderList() {
+  const groups = buildList();
+  if (!groups.length) {
+    return `<div class="empty"><span class="big">🛒</span>
+      Plan some meals and your grocery list<br>will build itself here.</div>`;
+  }
+  // drop stale check marks for items no longer on the list
+  const liveKeys = new Set(groups.flatMap(([, items]) => items.map((i) => i.key)));
+  for (const k of Object.keys(data.checked)) if (!liveKeys.has(k)) delete data.checked[k];
+
+  const total = liveKeys.size;
+  const done = Object.keys(data.checked).length;
+  let html = `<div class="progress">${done} of ${total} picked up</div>`;
+  for (const [label, items] of groups) {
+    html += `<div class="section"><h2>${label}</h2>`;
+    for (const it of items) {
+      const checked = !!data.checked[it.key];
+      const amount = it.hasQty
+        ? `${formatQty(it.qty)} ${esc(it.unit)}`.trim() + (it.unmeasured ? " + extra" : "")
+        : "";
+      html += `<div class="item${checked ? " done" : ""}" onclick="toggleItem('${esc(it.key).replace(/'/g, "\\'")}')">
+        <div class="box">${checked ? "✓" : ""}</div>
+        <div class="label">${amount ? `<span class="qty">${amount}</span>` : ""}${esc(it.name)}</div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  if (done) html += `<button class="secondary" onclick="uncheckAll()">Uncheck everything</button>`;
+  return html;
+}
+
+function toggleItem(key) {
+  if (data.checked[key]) delete data.checked[key];
+  else data.checked[key] = true;
+  save();
+  render();
+}
+
+function uncheckAll() {
+  data.checked = {};
+  save();
+  render();
+}
+
+// ----- backup -----
+function renderBackup() {
+  const count = data.recipes.length;
+  return `
+    <div class="card">
+      <h3>Your data lives on this phone</h3>
+      <div class="sub" style="margin-top:6px; line-height:1.5">
+        Everything (${count} recipe${count === 1 ? "" : "s"}, this week's plan) is stored in this
+        browser. Export a backup to the Files app every so often — it's one JSON file you can
+        re-import here any time, including on a new phone.
+      </div>
+    </div>
+    <button class="primary" onclick="exportData()">Export backup file</button>
+    <button class="secondary" onclick="document.getElementById('import-file').click()">Import a backup</button>
+    <input type="file" id="import-file" accept=".json,application/json" style="display:none" onchange="importData(this)">
+    <button class="secondary" onclick="go('recipes')">Back</button>
+    <button class="danger-btn" onclick="eraseAll()">Erase all data</button>`;
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "groceries-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importData(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const d = JSON.parse(reader.result);
+      if (!Array.isArray(d.recipes) || !Array.isArray(d.plan)) throw new Error("bad shape");
+      if (!confirm(`Replace everything here with this backup (${d.recipes.length} recipes)?`)) return;
+      data = { recipes: d.recipes, plan: d.plan, checked: d.checked || {} };
+      save();
+      go("recipes");
+    } catch (e) {
+      alert("That file doesn't look like a backup from this app.");
+    }
+  };
+  reader.readAsText(file);
+  input.value = "";
+}
+
+function eraseAll() {
+  if (!confirm("Erase ALL recipes and plans from this phone? Export a backup first if unsure.")) return;
+  if (!confirm("Really erase everything? This cannot be undone.")) return;
+  data = { recipes: [], plan: [], checked: {} };
+  save();
+  go("recipes");
+}
+
+// ---------- boot ----------
+if (typeof window !== "undefined") {
+  render();
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    navigator.serviceWorker.register("sw.js");
+  }
+}
+</script>
+</body>
+</html>
