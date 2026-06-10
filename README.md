@@ -24,16 +24,26 @@ to be switched on once:
 
 ## Using it
 
+- **Today** tab: a dashboard of today's planned meals by slot, today's food cost,
+  and the week at a glance (meal cost + grocery run estimate).
 - **Recipes** tab: add recipes with ingredient amounts. Quantities accept decimals
   and fractions ("1.5", "1/2", "1 1/2"). Leave the amount blank for things like
   "salt to taste". Pick a store section per ingredient — that's how the grocery
   list gets organized.
-- **Plan** tab: add meals to days of the week and adjust servings with the +/−
-  steppers. Ingredient amounts scale automatically (a 4-serving recipe planned at
-  2 servings halves everything).
+- **Plan** tab: add meals to days of the week as breakfast, lunch, dinner, or
+  snack, and adjust servings with the +/− steppers. Ingredient amounts scale
+  automatically (a 4-serving recipe planned at 2 servings halves everything).
 - **List** tab: builds itself from the plan. Same ingredient + same unit across
   recipes are summed into one line, grouped by section. Tap items to check them
   off while shopping; checks persist if you close the app mid-shop.
+- **Prices** tab: save ingredients the way you buy them ("rice · 1 kg · $3.50").
+  The app then shows cost per meal, per day, and per week, plus a grocery run
+  estimate. Two numbers on purpose: *meal cost* counts just what recipes use
+  (200 g of that 1 kg bag = $0.70); the *grocery run estimate* counts whole
+  packages, which is what you pay at the register. Weight (g/kg/oz/lb) and
+  volume (ml/l/tsp/tbsp/cup) convert automatically; other units (cans, heads,
+  pieces) match when the recipe uses the same unit word. Ingredients without a
+  price are flagged so you can fill them in.
 
 ## Backups
 
@@ -48,13 +58,15 @@ is durable for home-screen apps but not infallible.
   all logic in one `<script>` at the bottom (plain JavaScript, no framework).
 - `sw.js` is a small service worker that caches the app so it loads offline.
   If you change `index.html`, just push — it fetches fresh when online.
+- `tests.mjs` tests the scaling/merging/costing logic: `node tests.mjs`.
 - Data shape (also what the backup file contains):
   ```json
   {
     "recipes": [{ "id", "name", "servings", "notes",
                   "ingredients": [{ "qty", "unit", "name", "section" }] }],
-    "plan":    [{ "id", "day", "recipeId", "servings" }],
-    "checked": { "<name|unit>": true }
+    "plan":    [{ "id", "day", "slot", "recipeId", "servings" }],
+    "checked": { "<name|unit>": true },
+    "prices":  [{ "id", "name", "qty", "unit", "price" }]
   }
   ```
 - Deliberate v1 simplifications: ingredients merge on exact name + unit match
