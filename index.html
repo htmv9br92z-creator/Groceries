@@ -62,10 +62,10 @@ nav {
 nav button {
   flex: 1; padding: 10px 0 8px;
   background: none; border: none;
-  font-size: 22px; color: var(--muted);
+  font-size: 21px; color: var(--muted);
   display: flex; flex-direction: column; align-items: center; gap: 2px;
 }
-nav button span { font-size: 11px; font-weight: 600; }
+nav button span { font-size: 10px; font-weight: 600; }
 nav button.active { color: var(--accent); }
 .card {
   background: var(--card);
@@ -101,6 +101,19 @@ input, select, textarea {
 label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 12px 0 4px; }
 .empty { text-align: center; color: var(--muted); padding: 40px 16px; font-size: 15px; line-height: 1.5; }
 .empty .big { font-size: 40px; display: block; margin-bottom: 8px; }
+.chips { display: flex; gap: 8px; margin: 4px 0 14px; flex-wrap: wrap; }
+.chip {
+  padding: 9px 16px; border-radius: 20px;
+  border: 1.5px solid var(--line); background: var(--card);
+  color: var(--text); font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tag {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--accent); background: var(--accent-soft);
+  padding: 2px 7px; border-radius: 6px; margin-bottom: 3px;
+}
 
 /* recipe form ingredient rows */
 .ing-row {
@@ -116,11 +129,15 @@ label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); 
   background: none; border: none; color: var(--danger);
   font-size: 20px; padding: 0 12px; cursor: pointer;
 }
+.pkg-row { display: flex; gap: 6px; }
+.pkg-row input:first-child { flex: 0 0 90px; }
 
 /* plan */
 .day h2 { font-size: 15px; color: var(--muted); margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+.day h2 .money { text-transform: none; letter-spacing: 0; }
 .meal { display: flex; align-items: center; gap: 10px; }
-.meal .name { flex: 1; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.meal .info { flex: 1; min-width: 0; }
+.meal .name { font-weight: 600; overflow-wrap: anywhere; }
 .stepper { display: flex; align-items: center; gap: 2px; }
 .stepper button {
   width: 38px; height: 38px; border-radius: 10px;
@@ -157,25 +174,28 @@ label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); 
 .item.done .box { background: var(--accent); border-color: var(--accent); }
 .item.done .label { text-decoration: line-through; color: var(--muted); }
 .item .qty { font-weight: 700; margin-right: 4px; }
+.item .cost { margin-left: auto; text-align: right; font-size: 13px; color: var(--muted); white-space: nowrap; }
 .progress { font-size: 14px; color: var(--muted); margin-bottom: 4px; }
+.money { font-weight: 700; color: var(--accent); }
+.bigmoney { font-size: 26px; font-weight: 800; color: var(--accent); }
+.statrow { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; }
+.statrow + .statrow { border-top: 1px solid var(--line); }
+.warn { color: var(--danger); font-size: 13px; }
 </style>
 </head>
 <body>
 <header>
-  <h1 id="page-title">Recipes</h1>
+  <h1 id="page-title">Today</h1>
   <button class="ghost" onclick="go('backup')">Backup</button>
 </header>
 <main id="main"></main>
 <nav>
+  <button id="tab-today" onclick="go('today')">🏠<span>Today</span></button>
   <button id="tab-recipes" onclick="go('recipes')">📖<span>Recipes</span></button>
   <button id="tab-plan" onclick="go('plan')">📅<span>Plan</span></button>
   <button id="tab-list" onclick="go('list')">🛒<span>List</span></button>
+  <button id="tab-prices" onclick="go('prices')">🏷<span>Prices</span></button>
 </nav>
-<datalist id="units">
-  <option value="g"><option value="kg"><option value="ml"><option value="l">
-  <option value="cup"><option value="tbsp"><option value="tsp"><option value="oz">
-  <option value="lb"><option value="can"><option value="bunch"><option value="clove">
-</datalist>
 
 <script>
 "use strict";
@@ -192,19 +212,26 @@ const SECTIONS = [
   ["other", "Other"],
 ];
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const SLOTS = [
+  ["breakfast", "Breakfast"],
+  ["lunch", "Lunch"],
+  ["dinner", "Dinner"],
+  ["snack", "Snack"],
+];
 
 function load() {
+  let d = { recipes: [], plan: [], checked: {}, prices: [] };
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) {
-      const d = JSON.parse(raw);
-      if (Array.isArray(d.recipes) && Array.isArray(d.plan)) {
-        d.checked = d.checked || {};
-        return d;
-      }
+      const p = JSON.parse(raw);
+      if (Array.isArray(p.recipes) && Array.isArray(p.plan)) d = p;
     }
   } catch (e) { /* corrupted storage: fall through to a fresh start */ }
-  return { recipes: [], plan: [], checked: {} };
+  d.checked = d.checked || {};
+  d.prices = d.prices || [];
+  for (const m of d.plan) if (!m.slot) m.slot = "dinner";
+  return d;
 }
 
 function save() {
@@ -216,9 +243,12 @@ function uid() {
 }
 
 let data = load();
-let view = "recipes";
-let editingId = null;  // recipe id when editing, null when creating
-let pickDay = 0;       // day index the recipe picker is adding to
+let view = "today";
+let editingId = null;       // recipe id when editing, null when creating
+let editingPriceId = null;  // price item id when editing
+let prefillPriceName = "";  // name to prefill in the price form
+let pickDay = 0;            // day index the recipe picker is adding to
+let pickSlot = "dinner";    // slot the recipe picker is adding to
 
 // ---------- quantities ----------
 // Accepts "1.5", "1,5", "1/2", "1 1/2". Returns a number or null.
@@ -244,6 +274,89 @@ function formatQty(n) {
     if (Math.abs(frac - v) < 0.02) return whole ? whole + " " + ch : ch;
   }
   return String(+n.toFixed(2));
+}
+
+// ---------- costs ----------
+// Units convertible within weight ("m") and volume ("v"). Anything else
+// (pieces, cans, bunches…) only matches an identical unit string.
+const UNIT_BASE = {
+  g: ["m", 1], kg: ["m", 1000], oz: ["m", 28.35], lb: ["m", 453.6],
+  ml: ["v", 1], l: ["v", 1000], tsp: ["v", 4.93], tbsp: ["v", 14.79],
+  cup: ["v", 236.6], cups: ["v", 236.6],
+};
+
+function toBase(qty, unit) {
+  unit = (unit || "").trim().toLowerCase();
+  const u = UNIT_BASE[unit];
+  if (u) return { dim: u[0], amount: qty * u[1] };
+  return { dim: "x:" + unit, amount: qty };
+}
+
+function findPrice(name) {
+  name = name.trim().toLowerCase();
+  return data.prices.find((p) => p.name.trim().toLowerCase() === name);
+}
+
+function fmtMoney(n) {
+  return "$" + n.toFixed(2);
+}
+
+// Cost of one ingredient line at the given scale.
+// Returns a number, or null when it can't be costed (no price saved,
+// incompatible units). Unmeasured ingredients ("to taste") cost nothing.
+function ingredientCost(ing, scale) {
+  if (ing.qty == null) return 0;
+  const p = findPrice(ing.name);
+  if (!p || !(p.qty > 0) || !(p.price >= 0)) return null;
+  const need = toBase(ing.qty * scale, ing.unit);
+  const pkg = toBase(p.qty, p.unit);
+  if (need.dim !== pkg.dim) return null;
+  return p.price * need.amount / pkg.amount;
+}
+
+// Cost of a planned meal: { total, unknown } where unknown counts
+// measured ingredients that couldn't be costed.
+function mealCost(meal) {
+  const r = data.recipes.find((x) => x.id === meal.recipeId);
+  if (!r) return { total: 0, unknown: 0 };
+  const scale = r.servings > 0 ? meal.servings / r.servings : 1;
+  let total = 0, unknown = 0;
+  for (const ing of r.ingredients) {
+    const c = ingredientCost(ing, scale);
+    if (c == null) unknown++;
+    else total += c;
+  }
+  return { total, unknown };
+}
+
+function sumCosts(meals) {
+  let total = 0, unknown = 0;
+  for (const m of meals) {
+    const c = mealCost(m);
+    total += c.total;
+    unknown += c.unknown;
+  }
+  return { total, unknown };
+}
+
+function costLabel(c) {
+  let s = `<span class="money">${fmtMoney(c.total)}</span>`;
+  if (c.unknown) s += ` <span class="warn">· ${c.unknown} unpriced</span>`;
+  return s;
+}
+
+// Ingredient names used in the plan that have no saved price (deduplicated).
+function unpricedNames() {
+  const names = new Map();
+  for (const meal of data.plan) {
+    const r = data.recipes.find((x) => x.id === meal.recipeId);
+    if (!r) continue;
+    for (const ing of r.ingredients) {
+      if (ing.qty == null) continue;
+      if (!findPrice(ing.name)) names.set(ing.name.trim().toLowerCase(), ing.name.trim());
+    }
+  }
+  return [...names.values()].sort();
 }
 
 // ---------- grocery list ----------
@@ -277,6 +390,20 @@ function buildList() {
   return groups;
 }
 
+// Whole packages needed for a merged list item, or null if not costable.
+// Returns { packages, cost, pkgLabel }.
+function itemPurchase(item) {
+  if (!item.hasQty) return null;
+  const p = findPrice(item.name);
+  if (!p || !(p.qty > 0) || !(p.price >= 0)) return null;
+  const need = toBase(item.qty, item.unit);
+  const pkg = toBase(p.qty, p.unit);
+  if (need.dim !== pkg.dim) return null;
+  const packages = Math.max(1, Math.ceil(need.amount / pkg.amount - 1e-6));
+  return { packages, cost: packages * p.price,
+           pkgLabel: `${formatQty(p.qty)} ${p.unit || "×"}`.trim() };
+}
+
 // ---------- rendering ----------
 function esc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
@@ -292,20 +419,86 @@ function go(v, day) {
 
 function render() {
   const main = document.getElementById("main");
-  const titles = { recipes: "Recipes", form: editingId ? "Edit recipe" : "New recipe",
+  const titles = { today: "Today", recipes: "Recipes",
+                   form: editingId ? "Edit recipe" : "New recipe",
                    plan: "This week", pick: "Add to " + DAYS[pickDay],
-                   list: "Grocery list", backup: "Backup" };
+                   list: "Grocery list", prices: "Prices",
+                   priceform: editingPriceId ? "Edit item" : "New item",
+                   backup: "Backup" };
   document.getElementById("page-title").textContent = titles[view];
-  for (const t of ["recipes", "plan", "list"]) {
-    document.getElementById("tab-" + t).classList.toggle(
-      "active", view === t || (view === "form" && t === "recipes") || (view === "pick" && t === "plan"));
+  const tabFor = { today: "today", recipes: "recipes", form: "recipes",
+                   plan: "plan", pick: "plan", list: "list",
+                   prices: "prices", priceform: "prices" };
+  for (const t of ["today", "recipes", "plan", "list", "prices"]) {
+    document.getElementById("tab-" + t).classList.toggle("active", tabFor[view] === t);
   }
-  if (view === "recipes") main.innerHTML = renderRecipes();
+  if (view === "today") main.innerHTML = renderToday();
+  else if (view === "recipes") main.innerHTML = renderRecipes();
   else if (view === "form") renderForm(main);
   else if (view === "plan") main.innerHTML = renderPlan();
   else if (view === "pick") main.innerHTML = renderPick();
   else if (view === "list") main.innerHTML = renderList();
+  else if (view === "prices") main.innerHTML = renderPrices();
+  else if (view === "priceform") main.innerHTML = renderPriceForm();
   else if (view === "backup") main.innerHTML = renderBackup();
+}
+
+// ----- today dashboard -----
+function todayIndex() {
+  return (new Date().getDay() + 6) % 7;  // JS Sunday=0 → our Monday=0
+}
+
+function renderToday() {
+  const d = todayIndex();
+  const dateLabel = new Date().toLocaleDateString(undefined,
+    { weekday: "long", month: "short", day: "numeric" });
+  const todays = data.plan.filter((m) => m.day === d);
+  let html = `<div class="sub" style="margin-bottom:12px">${esc(dateLabel)}</div>`;
+
+  if (!todays.length) {
+    html += `<div class="empty"><span class="big">🍽</span>
+      Nothing planned for today.</div>
+      <button class="secondary" onclick="go('pick',${d})">＋ Plan something for today</button>`;
+  } else {
+    for (const [slotKey, slotLabel] of SLOTS) {
+      const meals = todays.filter((m) => m.slot === slotKey);
+      for (const m of meals) {
+        const r = data.recipes.find((x) => x.id === m.recipeId);
+        if (!r) continue;
+        html += `<div class="card tappable" onclick="openForm('${r.id}')">
+          <span class="tag">${slotLabel}</span>
+          <h3>${esc(r.name)}</h3>
+          <div class="sub">${m.servings} serving${m.servings === 1 ? "" : "s"} · ${costLabel(mealCost(m))}</div>
+        </div>`;
+      }
+    }
+    const todayCost = sumCosts(todays);
+    html += `<div class="card">
+      <div class="sub">Today's food cost</div>
+      <div class="bigmoney">${fmtMoney(todayCost.total)}</div>
+      ${todayCost.unknown ? `<div class="warn">${todayCost.unknown} ingredient${todayCost.unknown === 1 ? "" : "s"} without a price — add them in Prices</div>` : ""}
+    </div>`;
+  }
+
+  if (data.plan.length) {
+    const weekCost = sumCosts(data.plan);
+    let shopTotal = 0, shopUnknown = 0;
+    for (const [, items] of buildList()) {
+      for (const it of items) {
+        const buy = itemPurchase(it);
+        if (buy) shopTotal += buy.cost;
+        else if (it.hasQty) shopUnknown++;
+      }
+    }
+    html += `<div class="card">
+      <div class="statrow"><span class="sub">Meals planned this week</span><b>${data.plan.length}</b></div>
+      <div class="statrow"><span class="sub">Cost of this week's meals</span><span class="money">${fmtMoney(weekCost.total)}</span></div>
+      <div class="statrow"><span class="sub">Grocery run estimate</span><span class="money">${fmtMoney(shopTotal)}${shopUnknown ? ` <span class="warn">+ ${shopUnknown} unpriced</span>` : ""}</span></div>
+    </div>
+    <div class="sub" style="margin-top:4px">Meal cost counts just what the recipes use; the grocery
+    run estimate counts the whole packages you'd buy.</div>`;
+  }
+  return html;
 }
 
 // ----- recipes -----
@@ -362,7 +555,7 @@ function addIngRow(ing) {
   row.className = "ing-row";
   row.innerHTML = `
     <input class="i-qty" inputmode="decimal" placeholder="1 ½" value="${esc(formatQty(ing.qty))}">
-    <input class="i-unit" placeholder="cup" list="units" autocapitalize="none" value="${esc(ing.unit)}">
+    <input class="i-unit" placeholder="cup" autocapitalize="none" autocomplete="off" value="${esc(ing.unit)}">
     <input class="i-name" placeholder="ingredient" autocapitalize="none" value="${esc(ing.name)}">
     <div class="row2">
       <select class="i-sec">${sectionOptions(ing.section)}</select>
@@ -406,20 +599,32 @@ function deleteRecipe() {
 }
 
 // ----- plan -----
+function slotLabel(key) {
+  const s = SLOTS.find(([k]) => k === key);
+  return s ? s[1] : key;
+}
+
 function renderPlan() {
-  let html = "";
   if (!data.recipes.length) {
     return `<div class="empty"><span class="big">📅</span>
       Add a recipe first, then plan your week here.</div>`;
   }
+  const slotOrder = SLOTS.map(([k]) => k);
+  let html = "";
   for (let d = 0; d < 7; d++) {
-    const meals = data.plan.filter((m) => m.day === d);
-    html += `<div class="day"><h2>${DAYS[d]}</h2>`;
+    const meals = data.plan.filter((m) => m.day === d)
+      .sort((a, b) => slotOrder.indexOf(a.slot) - slotOrder.indexOf(b.slot));
+    const dayCost = sumCosts(meals);
+    html += `<div class="day"><h2>${DAYS[d]}${dayCost.total > 0 ? ` · <span class="money">${fmtMoney(dayCost.total)}</span>` : ""}</h2>`;
     for (const m of meals) {
       const r = data.recipes.find((x) => x.id === m.recipeId);
       if (!r) continue;
       html += `<div class="card meal">
-        <div class="name">${esc(r.name)}</div>
+        <div class="info">
+          <span class="tag">${slotLabel(m.slot)}</span>
+          <div class="name">${esc(r.name)}</div>
+          <div class="sub">${costLabel(mealCost(m))}</div>
+        </div>
         <div class="stepper">
           <button onclick="bumpServings('${m.id}',-1)">−</button>
           <div class="count">${m.servings}<br>srv</div>
@@ -431,7 +636,12 @@ function renderPlan() {
     html += `<button class="addmeal" onclick="go('pick',${d})">＋ Add meal</button></div>`;
   }
   if (data.plan.length) {
-    html += `<button class="danger-btn" onclick="clearWeek()">Clear the whole week</button>`;
+    const weekCost = sumCosts(data.plan);
+    html += `<div class="card" style="margin-top:18px">
+      <div class="statrow"><span class="sub">This week's meal cost</span><span class="money">${fmtMoney(weekCost.total)}</span></div>
+      ${weekCost.unknown ? `<div class="warn">${weekCost.unknown} ingredient uses without a price</div>` : ""}
+    </div>
+    <button class="danger-btn" onclick="clearWeek()">Clear the whole week</button>`;
   }
   return html;
 }
@@ -458,7 +668,9 @@ function clearWeek() {
 }
 
 function renderPick() {
-  let html = "";
+  let html = `<div class="chips">` + SLOTS.map(([k, label]) =>
+    `<button class="chip${k === pickSlot ? " active" : ""}" onclick="setPickSlot('${k}')">${label}</button>`
+  ).join("") + `</div>`;
   const sorted = [...data.recipes].sort((a, b) => a.name.localeCompare(b.name));
   for (const r of sorted) {
     html += `<div class="card tappable" onclick="addMeal('${r.id}')">
@@ -470,9 +682,14 @@ function renderPick() {
   return html;
 }
 
+function setPickSlot(slot) {
+  pickSlot = slot;
+  render();
+}
+
 function addMeal(recipeId) {
   const r = data.recipes.find((x) => x.id === recipeId);
-  data.plan.push({ id: uid(), day: pickDay, recipeId, servings: r.servings });
+  data.plan.push({ id: uid(), day: pickDay, slot: pickSlot, recipeId, servings: r.servings });
   save();
   go("plan");
 }
@@ -488,9 +705,19 @@ function renderList() {
   const liveKeys = new Set(groups.flatMap(([, items]) => items.map((i) => i.key)));
   for (const k of Object.keys(data.checked)) if (!liveKeys.has(k)) delete data.checked[k];
 
+  let shopTotal = 0, shopUnknown = 0;
+  for (const [, items] of groups) {
+    for (const it of items) {
+      const buy = itemPurchase(it);
+      if (buy) shopTotal += buy.cost;
+      else if (it.hasQty) shopUnknown++;
+    }
+  }
+
   const total = liveKeys.size;
   const done = Object.keys(data.checked).length;
-  let html = `<div class="progress">${done} of ${total} picked up</div>`;
+  let html = `<div class="progress">${done} of ${total} picked up ·
+    estimated <span class="money">${fmtMoney(shopTotal)}</span>${shopUnknown ? ` <span class="warn">+ ${shopUnknown} unpriced</span>` : ""}</div>`;
   for (const [label, items] of groups) {
     html += `<div class="section"><h2>${label}</h2>`;
     for (const it of items) {
@@ -498,9 +725,14 @@ function renderList() {
       const amount = it.hasQty
         ? `${formatQty(it.qty)} ${esc(it.unit)}`.trim() + (it.unmeasured ? " + extra" : "")
         : "";
+      const buy = itemPurchase(it);
+      const costHtml = buy
+        ? `<div class="cost">${fmtMoney(buy.cost)}<br>${buy.packages} × ${esc(buy.pkgLabel)}</div>`
+        : "";
       html += `<div class="item${checked ? " done" : ""}" onclick="toggleItem('${esc(it.key).replace(/'/g, "\\'")}')">
         <div class="box">${checked ? "✓" : ""}</div>
         <div class="label">${amount ? `<span class="qty">${amount}</span>` : ""}${esc(it.name)}</div>
+        ${costHtml}
       </div>`;
     }
     html += `</div>`;
@@ -522,6 +754,98 @@ function uncheckAll() {
   render();
 }
 
+// ----- prices -----
+function renderPrices() {
+  let html = `<button class="primary" style="margin:0 0 16px" onclick="openPriceForm(null,'')">＋ New item</button>`;
+
+  const missing = unpricedNames();
+  if (missing.length) {
+    html += `<div class="card">
+      <h3>Missing prices in this week's plan</h3>
+      <div class="sub" style="margin-bottom:4px">Tap one to add it as you buy it at the store.</div>
+      <div class="chips" style="margin-bottom:0">` +
+      missing.map((n) => `<button class="chip" onclick="openPriceForm(null,'${esc(n).replace(/'/g, "\\'")}')">${esc(n)}</button>`).join("") +
+      `</div></div>`;
+  }
+
+  if (!data.prices.length) {
+    html += `<div class="empty"><span class="big">🏷</span>
+      Save ingredients the way you buy them —<br>"rice · 1 kg · $3.50" — and the app<br>works out what each meal costs.</div>`;
+    return html;
+  }
+  const sorted = [...data.prices].sort((a, b) => a.name.localeCompare(b.name));
+  for (const p of sorted) {
+    html += `<div class="card tappable" onclick="openPriceForm('${p.id}','')">
+      <h3>${esc(p.name)}</h3>
+      <div class="sub">${formatQty(p.qty)} ${esc(p.unit || "×")} — <span class="money">${fmtMoney(p.price)}</span></div>
+    </div>`;
+  }
+  return html;
+}
+
+function openPriceForm(id, prefill) {
+  editingPriceId = id;
+  prefillPriceName = prefill || "";
+  go("priceform");
+}
+
+function renderPriceForm() {
+  const p = editingPriceId
+    ? data.prices.find((x) => x.id === editingPriceId)
+    : { name: prefillPriceName, qty: null, unit: "", price: null };
+  return `
+    <label>Ingredient name (must match the recipes)</label>
+    <input id="p-name" value="${esc(p.name)}" placeholder="rice" autocapitalize="none">
+    <label>Package size — the amount you buy at the store</label>
+    <div class="pkg-row">
+      <input id="p-qty" inputmode="decimal" placeholder="1" value="${esc(formatQty(p.qty))}">
+      <input id="p-unit" placeholder="kg (or blank for pieces)" autocapitalize="none" autocomplete="off" value="${esc(p.unit)}">
+    </div>
+    <label>Price of that package</label>
+    <input id="p-price" inputmode="decimal" placeholder="3.50" value="${p.price != null ? p.price : ""}">
+    <button class="primary" onclick="savePrice()">Save item</button>
+    <button class="secondary" onclick="go('prices')">Cancel</button>
+    ${editingPriceId ? `<button class="danger-btn" onclick="deletePrice()">Delete item</button>` : ""}
+    <div class="sub" style="margin-top:16px; line-height:1.5">
+      Weight (g, kg, oz, lb) and volume (ml, l, tsp, tbsp, cup) convert automatically,
+      so a recipe using "200 g" matches a "1 kg" package. Anything else — cans, bunches,
+      pieces — matches only when the recipe uses the same unit word (or both leave it blank).
+    </div>`;
+}
+
+function savePrice() {
+  const name = document.getElementById("p-name").value.trim();
+  const qty = parseQty(document.getElementById("p-qty").value);
+  const unit = document.getElementById("p-unit").value.trim();
+  const price = parseQty(document.getElementById("p-price").value.replace("$", ""));
+  if (!name) { alert("Give the item a name first."); return; }
+  if (!(qty > 0)) { alert("Enter the package amount (e.g. 1 for 1 kg)."); return; }
+  if (!(price >= 0)) { alert("Enter the package price."); return; }
+  if (!editingPriceId) {
+    const existing = findPrice(name);
+    if (existing) {
+      // same name twice would be ambiguous — update the existing item instead
+      Object.assign(existing, { name, qty, unit, price });
+      save(); go("prices"); return;
+    }
+  }
+  if (editingPriceId) {
+    Object.assign(data.prices.find((x) => x.id === editingPriceId), { name, qty, unit, price });
+  } else {
+    data.prices.push({ id: uid(), name, qty, unit, price });
+  }
+  save();
+  go("prices");
+}
+
+function deletePrice() {
+  const p = data.prices.find((x) => x.id === editingPriceId);
+  if (!confirm(`Delete the price for “${p.name}”?`)) return;
+  data.prices = data.prices.filter((x) => x.id !== editingPriceId);
+  save();
+  go("prices");
+}
+
 // ----- backup -----
 function renderBackup() {
   const count = data.recipes.length;
@@ -529,15 +853,16 @@ function renderBackup() {
     <div class="card">
       <h3>Your data lives on this phone</h3>
       <div class="sub" style="margin-top:6px; line-height:1.5">
-        Everything (${count} recipe${count === 1 ? "" : "s"}, this week's plan) is stored in this
-        browser. Export a backup to the Files app every so often — it's one JSON file you can
-        re-import here any time, including on a new phone.
+        Everything (${count} recipe${count === 1 ? "" : "s"}, this week's plan, ${data.prices.length}
+        priced item${data.prices.length === 1 ? "" : "s"}) is stored in this browser. Export a backup
+        to the Files app every so often — it's one JSON file you can re-import here any time,
+        including on a new phone.
       </div>
     </div>
     <button class="primary" onclick="exportData()">Export backup file</button>
     <button class="secondary" onclick="document.getElementById('import-file').click()">Import a backup</button>
     <input type="file" id="import-file" accept=".json,application/json" style="display:none" onchange="importData(this)">
-    <button class="secondary" onclick="go('recipes')">Back</button>
+    <button class="secondary" onclick="go('today')">Back</button>
     <button class="danger-btn" onclick="eraseAll()">Erase all data</button>`;
 }
 
@@ -559,9 +884,10 @@ function importData(input) {
       const d = JSON.parse(reader.result);
       if (!Array.isArray(d.recipes) || !Array.isArray(d.plan)) throw new Error("bad shape");
       if (!confirm(`Replace everything here with this backup (${d.recipes.length} recipes)?`)) return;
-      data = { recipes: d.recipes, plan: d.plan, checked: d.checked || {} };
+      data = { recipes: d.recipes, plan: d.plan, checked: d.checked || {}, prices: d.prices || [] };
+      for (const m of data.plan) if (!m.slot) m.slot = "dinner";
       save();
-      go("recipes");
+      go("today");
     } catch (e) {
       alert("That file doesn't look like a backup from this app.");
     }
@@ -571,11 +897,11 @@ function importData(input) {
 }
 
 function eraseAll() {
-  if (!confirm("Erase ALL recipes and plans from this phone? Export a backup first if unsure.")) return;
+  if (!confirm("Erase ALL recipes, plans and prices from this phone? Export a backup first if unsure.")) return;
   if (!confirm("Really erase everything? This cannot be undone.")) return;
-  data = { recipes: [], plan: [], checked: {} };
+  data = { recipes: [], plan: [], checked: {}, prices: [] };
   save();
-  go("recipes");
+  go("today");
 }
 
 // ---------- boot ----------
