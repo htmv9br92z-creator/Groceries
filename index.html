@@ -132,6 +132,8 @@ label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); 
 .pkg-row { display: flex; gap: 6px; }
 .pkg-row input:first-child { flex: 0 0 90px; }
 .macro-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.rec-row { grid-template-columns: 30px 1fr 70px; align-items: center; }
+.rec-row input[type=checkbox] { width: 24px; height: 24px; accent-color: var(--accent); }
 
 /* plan */
 .day h2 { font-size: 15px; color: var(--muted); margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -546,11 +548,11 @@ function render() {
                    plan: "This week", pick: "Add to " + DAYS[pickDay],
                    list: "Grocery list", prices: "Items",
                    priceform: editingPriceId ? "Edit item" : "New item",
-                   backup: "Backup" };
+                   scanreceipt: "Scan receipt", backup: "Backup" };
   document.getElementById("page-title").textContent = titles[view];
   const tabFor = { today: "today", recipes: "recipes", form: "recipes",
                    plan: "plan", pick: "plan", list: "list",
-                   prices: "prices", priceform: "prices" };
+                   prices: "prices", priceform: "prices", scanreceipt: "prices" };
   for (const t of ["today", "recipes", "plan", "list", "prices"]) {
     document.getElementById("tab-" + t).classList.toggle("active", tabFor[view] === t);
   }
@@ -562,6 +564,7 @@ function render() {
   else if (view === "list") main.innerHTML = renderList();
   else if (view === "prices") main.innerHTML = renderPrices();
   else if (view === "priceform") main.innerHTML = renderPriceForm();
+  else if (view === "scanreceipt") main.innerHTML = renderScanReceipt();
   else if (view === "backup") main.innerHTML = renderBackup();
 }
 
@@ -907,9 +910,120 @@ function uncheckAll() {
   render();
 }
 
+// ----- receipt & nutrition label parsing -----
+// Receipt lines that are payment noise rather than purchased items.
+const RECEIPT_SKIP = /\b(sub\s*total|total|tax|change|cash|card|visa|mastercard|amex|debit|credit|balance|due|payment|loyalty|points|savings|saved|refund|thank|receipt|cashier|invoice)\b|www\.|http/i;
+
+// Pulls {name, price} item lines out of scanned receipt text.
+// "AVOCADO 2 @ 1.50 3.00" uses the per-unit price; leading barcodes are stripped.
+function parseReceiptText(text) {
+  const out = [];
+  for (let line of (text || "").split(/\n+/)) {
+    line = line.trim();
+    if (!line || RECEIPT_SKIP.test(line)) continue;
+    let m = line.match(/^(.+?)\s+\d+\s*@\s*\$?(\d+[.,]\d{2})\b.*$/);
+    if (!m) m = line.match(/^(.+?)\s+\$?(\d+[.,]\d{2})\s*[A-Za-z*]?$/);
+    if (!m) continue;
+    const price = parseFloat(m[2].replace(",", "."));
+    const name = m[1].replace(/^[#*\s]+/, "").replace(/^\d{4,}\s*/, "")
+      .replace(/\s{2,}/g, " ").trim().toLowerCase();
+    if (!name || /^\d+$/.test(name)) continue;
+    out.push({ name, price });
+  }
+  return out;
+}
+
+// Pulls serving size and macros out of scanned nutrition label text.
+// Handles US "Nutrition Facts" and EU "per 100 g" styles; ignores
+// saturated/trans fat and fiber/sugar sub-lines.
+function parseNutritionText(text) {
+  const out = {};
+  const t = text || "";
+  const serving = t.match(/serving size[^(\n]*\(\s*([\d.]+)\s*(g|ml)\s*\)/i)
+    || t.match(/serving size[:\s]*([\d.]+)\s*(g|ml)\b/i)
+    || t.match(/per\s*([\d.]+)\s*(g|ml)\b/i);
+  if (serving) { out.qty = parseFloat(serving[1]); out.unit = serving[2].toLowerCase(); }
+  for (const line of t.split(/\n+/)) {
+    if (out.kcal == null) {
+      let n;
+      if (/calorie/i.test(line)) n = line.match(/(\d+(?:\.\d+)?)/);
+      else if (/kcal/i.test(line)) n = line.match(/(\d+(?:\.\d+)?)\s*kcal/i);
+      if (n) out.kcal = parseFloat(n[1]);
+    }
+    if (out.protein == null && /protein/i.test(line)) {
+      const n = line.match(/([\d.]+)\s*g\b/i);
+      if (n) out.protein = parseFloat(n[1]);
+    }
+    if (out.fat == null && /fat/i.test(line) && !/satur|trans/i.test(line)) {
+      const n = line.match(/([\d.]+)\s*g\b/i);
+      if (n) out.fat = parseFloat(n[1]);
+    }
+    if (out.carbs == null && /carb/i.test(line) && !/fib|sugar/i.test(line)) {
+      const n = line.match(/([\d.]+)\s*g\b/i);
+      if (n) out.carbs = parseFloat(n[1]);
+    }
+  }
+  return out;
+}
+
+function renderScanReceipt() {
+  return `
+    <div class="sub" style="line-height:1.5; margin-bottom:8px">Tap the box below, then tap
+    the <b>Scan Text</b> camera button on the iPhone keyboard and point at your receipt —
+    the phone's built-in text recognition types it in for you. (Or paste text copied from
+    a photo.) Then tap <b>Find items</b>.</div>
+    <textarea id="r-text" rows="7" placeholder="bananas  1.29&#10;2% milk  4.59&#10;rice 1kg  3.50"></textarea>
+    <button class="primary" onclick="parseReceipt()">Find items</button>
+    <div id="r-results"></div>
+    <button class="secondary" onclick="go('prices')">Cancel</button>`;
+}
+
+function parseReceipt() {
+  const rows = parseReceiptText(document.getElementById("r-text").value);
+  const box = document.getElementById("r-results");
+  if (!rows.length) {
+    box.innerHTML = `<div class="empty">No priced lines found — each item needs a
+      price like 3.49 at the end of its line.</div>`;
+    return;
+  }
+  box.innerHTML = rows.map((r) => `
+    <div class="ing-row rec-row">
+      <input type="checkbox" checked class="rc-on">
+      <input class="rc-name" value="${esc(r.name)}" autocapitalize="none">
+      <input class="rc-price" inputmode="decimal" value="${r.price}">
+      <div class="row2">
+        <input class="rc-qty" inputmode="decimal" placeholder="package amount" value="1">
+        <input class="rc-unit" placeholder="unit (kg, blank = pieces)" autocapitalize="none">
+      </div>
+    </div>`).join("") + `
+    <div class="sub" style="margin-top:10px; line-height:1.5">Edit names to match what your
+    recipes call them, and set the package size where you know it (defaults to "1 piece").</div>
+    <button class="primary" onclick="saveReceiptItems()">Add checked items</button>`;
+}
+
+function saveReceiptItems() {
+  let added = 0;
+  for (const row of document.querySelectorAll(".rec-row")) {
+    if (!row.querySelector(".rc-on").checked) continue;
+    const name = row.querySelector(".rc-name").value.trim();
+    const price = parseQty(row.querySelector(".rc-price").value.replace("$", ""));
+    const qty = parseQty(row.querySelector(".rc-qty").value) || 1;
+    const unit = row.querySelector(".rc-unit").value.trim();
+    if (!name || price == null) continue;
+    const existing = findPrice(name);  // re-scanning a receipt updates, not duplicates
+    if (existing) Object.assign(existing, { name, qty, unit, price });
+    else data.prices.push({ id: uid(), name, qty, unit, price });
+    added++;
+  }
+  if (!added) { alert("Nothing checked — tick the items you want to add."); return; }
+  save();
+  go("prices");
+}
+
 // ----- prices -----
 function renderPrices() {
-  let html = `<button class="primary" style="margin:0 0 16px" onclick="openPriceForm(null,'')">＋ New item</button>`;
+  let html = `<button class="primary" style="margin:0" onclick="openPriceForm(null,'')">＋ New item</button>
+    <button class="secondary" style="margin:8px 0 16px" onclick="go('scanreceipt')">📷 Scan a receipt</button>`;
 
   const missing = unpricedNames();
   if (missing.length) {
@@ -976,6 +1090,11 @@ function renderPriceForm() {
       <input id="m-carbs" inputmode="decimal" placeholder="carbs (g)" value="${m.carbs != null ? m.carbs : ""}">
       <input id="m-fat" inputmode="decimal" placeholder="fat (g)" value="${m.fat != null ? m.fat : ""}">
     </div>
+    <button class="secondary" onclick="toggleLabelScan()">📷 Scan a nutrition label</button>
+    <div id="label-scan" style="display:none">
+      <textarea id="l-text" rows="6" style="margin-top:8px" placeholder="Tap here, then tap the Scan Text camera button on the keyboard and point at the label."></textarea>
+      <button class="secondary" onclick="readLabel()">Read the label</button>
+    </div>
     <button class="primary" onclick="savePrice()">Save item</button>
     <button class="secondary" onclick="go('prices')">Cancel</button>
     ${editingPriceId ? `<button class="danger-btn" onclick="deletePrice()">Delete item</button>` : ""}
@@ -986,6 +1105,26 @@ function renderPriceForm() {
       same unit word (or both leave it blank). An item can have a price, nutrition,
       or both.
     </div>`;
+}
+
+function toggleLabelScan() {
+  const el = document.getElementById("label-scan");
+  el.style.display = el.style.display === "none" ? "block" : "none";
+}
+
+function readLabel() {
+  const r = parseNutritionText(document.getElementById("l-text").value);
+  let found = 0;
+  if (r.qty) {
+    document.getElementById("m-qty").value = r.qty;
+    document.getElementById("m-unit").value = r.unit;
+    found++;
+  }
+  const fields = { kcal: "m-kcal", protein: "m-protein", carbs: "m-carbs", fat: "m-fat" };
+  for (const k in fields) {
+    if (r[k] != null) { document.getElementById(fields[k]).value = r[k]; found++; }
+  }
+  if (!found) alert("Couldn't find nutrition numbers in that text — you can type them in above.");
 }
 
 function savePrice() {
