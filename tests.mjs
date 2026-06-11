@@ -118,6 +118,68 @@ close(day.kcal, 142.5, "per-person day macros sum one serving of each meal");
 // macros-only item (lettuce, price null) must not cost $0
 eq(hasValidPrice(findPrice("lettuce")), false, "null price is not a valid price");
 
+// --- receipt parsing ---
+const receipt = `WHOLE FOODS MARKET
+123 Main Street
+BANANAS 1.29 F
+2% MILK 4.59
+0123456789 RICE 1KG 3.50
+AVOCADO 2 @ 1.50 3.00
+SUBTOTAL 12.38
+TAX 0.85
+TOTAL 13.23
+VISA ****1234
+THANK YOU`;
+const recItems = parseReceiptText(receipt);
+eq(recItems.length, 4, "receipt: four item lines found");
+eq(recItems[0], { name: "bananas", price: 1.29 }, "receipt: trailing flag letter ignored");
+eq(recItems[1], { name: "2% milk", price: 4.59 }, "receipt: short leading digits kept in name");
+eq(recItems[2], { name: "rice 1kg", price: 3.5 }, "receipt: long barcode stripped from name");
+eq(recItems[3], { name: "avocado", price: 1.5 }, "receipt: '2 @ 1.50' uses per-unit price");
+eq(parseReceiptText("just some words\nno prices here"), [], "receipt: no priced lines → empty");
+
+// --- nutrition label parsing (US style) ---
+const usLabel = `Nutrition Facts
+8 servings per container
+Serving size 2/3 cup (55g)
+Amount per serving
+Calories 230
+Total Fat 8g 10%
+Saturated Fat 1g 5%
+Trans Fat 0g
+Cholesterol 0mg
+Sodium 160mg 7%
+Total Carbohydrate 37g 13%
+Dietary Fiber 4g
+Total Sugars 12g
+Includes 10g Added Sugars
+Protein 3g`;
+const us = parseNutritionText(usLabel);
+eq(us.qty, 55, "US label: gram serving size from parenthetical");
+eq(us.unit, "g", "US label: serving unit");
+eq(us.kcal, 230, "US label: calories");
+eq(us.fat, 8, "US label: total fat, not saturated/trans");
+eq(us.carbs, 37, "US label: total carbs, not fiber/sugars");
+eq(us.protein, 3, "US label: protein");
+
+// --- nutrition label parsing (EU style) ---
+const euLabel = `Nutrition information per 100 g
+Energy 1046 kJ / 250 kcal
+Fat 9.0 g
+of which saturates 1.2 g
+Carbohydrate 33 g
+of which sugars 5.6 g
+Fibre 3.1 g
+Protein 8.4 g
+Salt 0.9 g`;
+const eu = parseNutritionText(euLabel);
+eq(eu.qty, 100, "EU label: per-100g reference amount");
+eq(eu.kcal, 250, "EU label: kcal taken from kJ/kcal pair");
+eq(eu.fat, 9, "EU label: fat, saturates skipped");
+eq(eu.carbs, 33, "EU label: carbs, sugars skipped");
+eq(eu.protein, 8.4, "EU label: protein");
+eq(parseNutritionText("hello world").kcal, undefined, "label: garbage text finds nothing");
+
 // --- unpriced names for the Prices tab ---
 eq(unpricedNames(), ["lettuce"], "lettuce is the only unpriced planned ingredient");
 
