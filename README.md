@@ -36,14 +36,18 @@ to be switched on once:
 - **List** tab: builds itself from the plan. Same ingredient + same unit across
   recipes are summed into one line, grouped by section. Tap items to check them
   off while shopping; checks persist if you close the app mid-shop.
-- **Prices** tab: save ingredients the way you buy them ("rice · 1 kg · $3.50").
+- **Items** tab: save ingredients the way you buy them ("rice · 1 kg · $3.50"),
+  optionally with nutrition straight from the label ("per 100 g: 130 kcal,
+  2.7 protein, 28 carbs, 0.3 fat"). An item can have a price, macros, or both.
   The app then shows cost per meal, per day, and per week, plus a grocery run
-  estimate. Two numbers on purpose: *meal cost* counts just what recipes use
+  estimate — and per-serving calories/protein/carbs/fat on every meal, with
+  daily totals on the Today tab (one serving of each meal, i.e. what one person
+  eats). Two cost numbers on purpose: *meal cost* counts just what recipes use
   (200 g of that 1 kg bag = $0.70); the *grocery run estimate* counts whole
   packages, which is what you pay at the register. Weight (g/kg/oz/lb) and
   volume (ml/l/tsp/tbsp/cup) convert automatically; other units (cans, heads,
   pieces) match when the recipe uses the same unit word. Ingredients without a
-  price are flagged so you can fill them in.
+  price or nutrition info are flagged, never silently counted as zero.
 
 ## Backups
 
@@ -66,7 +70,8 @@ is durable for home-screen apps but not infallible.
                   "ingredients": [{ "qty", "unit", "name", "section" }] }],
     "plan":    [{ "id", "day", "slot", "recipeId", "servings" }],
     "checked": { "<name|unit>": true },
-    "prices":  [{ "id", "name", "qty", "unit", "price" }]
+    "prices":  [{ "id", "name", "qty", "unit", "price",
+                  "macros": { "qty", "unit", "kcal", "protein", "carbs", "fat" } }]
   }
   ```
 - Deliberate v1 simplifications: ingredients merge on exact name + unit match
