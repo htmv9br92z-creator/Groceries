@@ -55,8 +55,11 @@ globalThis.data = {
   ],
   checked: {},
   prices: [
-    { id: "p1", name: "rice", qty: 1, unit: "kg", price: 3.5 },
+    { id: "p1", name: "rice", qty: 1, unit: "kg", price: 3.5,
+      macros: { qty: 100, unit: "g", kcal: 130, protein: 2.7, carbs: 28, fat: 0.3 } },
     { id: "p2", name: "carrots", qty: 1, unit: "", price: 0.4 },
+    { id: "p3", name: "lettuce", qty: 1, unit: "head", price: null,
+      macros: { qty: 1, unit: "head", kcal: 50, protein: 4, carbs: 10, fat: 0 } },
   ],
 };
 
@@ -93,6 +96,27 @@ const carrotItem = produce.find((i) => i.name.toLowerCase() === "carrots");
 eq(itemPurchase(carrotItem).packages, 6, "6 loose carrots = 6 packages");
 eq(itemPurchase(produce.find((i) => i.name === "lettuce")), null, "unpriced item has no purchase");
 eq(itemPurchase(pantry.find((i) => i.name === "salt")), null, "unmeasured item has no purchase");
+
+// --- macros ---
+// rice: 400 g at 130 kcal / 100 g → 520 kcal
+const riceMac = ingredientMacros({ qty: 200, unit: "g", name: "rice" }, 2);
+close(riceMac.kcal, 520, "macro unit conversion (g per 100 g)");
+close(riceMac.protein, 10.8, "protein scales");
+eq(ingredientMacros({ qty: null, unit: "", name: "salt" }, 1), false, "unmeasured ingredient skipped in macros");
+eq(ingredientMacros({ qty: 2, unit: "", name: "carrots" }, 1), null, "item without macros → null");
+close(ingredientMacros({ qty: 1, unit: "head", name: "lettuce" }, 0.5).kcal, 25, "count-unit macros match by unit word");
+
+const m1mac = mealMacros(data.plan[0]);  // 2x soup
+close(m1mac.kcal, 520, "meal macros sum tracked ingredients");
+eq(m1mac.tracked, 1, "rice tracked");
+eq(m1mac.untracked, 1, "carrots untracked (no macros on item)");
+eq(macroSub(data.plan[0]).includes("130 kcal"), true, "per-serving kcal in meal label");
+
+const day = perServingMacros(data.plan);  // 520/4 + 25/2
+close(day.kcal, 142.5, "per-person day macros sum one serving of each meal");
+
+// macros-only item (lettuce, price null) must not cost $0
+eq(hasValidPrice(findPrice("lettuce")), false, "null price is not a valid price");
 
 // --- unpriced names for the Prices tab ---
 eq(unpricedNames(), ["lettuce"], "lettuce is the only unpriced planned ingredient");
