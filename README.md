@@ -49,8 +49,10 @@ to be switched on once:
   pieces) match when the recipe uses the same unit word. Ingredients without a
   price or nutrition info are flagged, never silently counted as zero.
 - **Scanning with the camera**: the app uses the iPhone's built-in text
-  recognition rather than bundling its own — tap into a scan box, then tap the
-  **Scan Text** camera button on the iOS keyboard. "Scan a receipt" (Items tab)
+  recognition rather than bundling its own — **touch and hold** inside a scan
+  box until the pop-up menu appears, then tap **Scan Text** (the camera/document
+  option; tap **›** if it's hidden behind more options). Needs iOS 16+; otherwise
+  photograph the label, copy the text, and paste. "Scan a receipt" (Items tab)
   finds the priced line items, skips totals/tax/card noise, and shows a review
   list before saving; "Scan a nutrition label" (in the item form) reads serving
   size and macros from US Nutrition Facts or EU per-100g labels, ignoring
