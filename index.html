@@ -968,10 +968,11 @@ function parseNutritionText(text) {
 
 function renderScanReceipt() {
   return `
-    <div class="sub" style="line-height:1.5; margin-bottom:8px">Tap the box below, then tap
-    the <b>Scan Text</b> camera button on the iPhone keyboard and point at your receipt —
-    the phone's built-in text recognition types it in for you. (Or paste text copied from
-    a photo.) Then tap <b>Find items</b>.</div>
+    <div class="sub" style="line-height:1.5; margin-bottom:8px"><b>Touch and hold</b> inside
+    the box below until a small menu pops up, then tap <b>Scan Text</b> (📄) — point the camera
+    at your receipt and the words type themselves in. No Scan Text in the menu? Tap the <b>›</b>
+    arrow on it to find it, or just snap a normal photo of the receipt and <b>Paste</b> it here.
+    Then tap <b>Find items</b>.</div>
     <textarea id="r-text" rows="7" placeholder="bananas  1.29&#10;2% milk  4.59&#10;rice 1kg  3.50"></textarea>
     <button class="primary" onclick="parseReceipt()">Find items</button>
     <div id="r-results"></div>
@@ -1092,7 +1093,10 @@ function renderPriceForm() {
     </div>
     <button class="secondary" onclick="toggleLabelScan()">📷 Scan a nutrition label</button>
     <div id="label-scan" style="display:none">
-      <textarea id="l-text" rows="6" style="margin-top:8px" placeholder="Tap here, then tap the Scan Text camera button on the keyboard and point at the label."></textarea>
+      <div class="sub" style="line-height:1.5; margin:8px 0"><b>Touch and hold</b> inside the
+      box, tap <b>Scan Text</b> (📄), and point the camera at the nutrition label — or paste a
+      photo's text. Then tap <b>Read the label</b>.</div>
+      <textarea id="l-text" rows="6" placeholder="Touch and hold here → Scan Text, then aim at the label."></textarea>
       <button class="secondary" onclick="readLabel()">Read the label</button>
     </div>
     <button class="primary" onclick="savePrice()">Save item</button>
