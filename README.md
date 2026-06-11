@@ -49,20 +49,32 @@ to be switched on once:
   pieces) match when the recipe uses the same unit word. Ingredients without a
   price or nutrition info are flagged, never silently counted as zero.
 
-## Backups
+## Backups & data safety
 
 Tap **Backup** (top right) → **Export backup file** to save a JSON file to the
 Files app (put it in iCloud Drive and it's off-device). **Import a backup**
-restores it — on this phone or a new one. Do this occasionally; browser storage
-is durable for home-screen apps but not infallible.
+restores it — on this phone or a new one.
+
+Three safety nets run automatically:
+- every save is mirrored to a second on-device store (IndexedDB), and if the
+  main storage ever comes up empty the app restores from the mirror and tells you;
+- the browser is asked to mark the app's storage as persistent;
+- if it's been more than two weeks since your last export, the Today tab shows
+  a one-tap backup reminder.
+
+The export file is still the only copy that survives losing the phone itself,
+so take the reminder seriously.
 
 ## Notes for future maintenance
 
 - `index.html` is the whole app: CSS at the top, HTML skeleton in the middle,
   all logic in one `<script>` at the bottom (plain JavaScript, no framework).
 - `sw.js` is a small service worker that caches the app so it loads offline.
-  If you change `index.html`, just push — it fetches fresh when online.
-- `tests.mjs` tests the scaling/merging/costing logic: `node tests.mjs`.
+  If you change `index.html`, just push — it fetches fresh when online, and the
+  app reloads itself when reopened after a long suspension, so it never runs a
+  stale version for long.
+- `tests.mjs` tests the scaling/merging/costing logic: `node tests.mjs`. The
+  deploy workflow runs it first and won't publish if a test fails.
 - Data shape (also what the backup file contains):
   ```json
   {
