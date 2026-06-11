@@ -121,13 +121,26 @@ eq(hasValidPrice(findPrice("lettuce")), false, "null price is not a valid price"
 // --- unpriced names for the Prices tab ---
 eq(unpricedNames(), ["lettuce"], "lettuce is the only unpriced planned ingredient");
 
-// --- plan slot migration on import shape ---
-const migrated = (() => {
-  const d = { recipes: [], plan: [{ id: "x", day: 0, recipeId: "r1", servings: 2 }], checked: {}, prices: [] };
-  for (const m of d.plan) if (!m.slot) m.slot = "dinner";
-  return d.plan[0].slot;
-})();
-eq(migrated, "dinner", "plan entries without slot default to dinner");
+// --- migration of older data shapes ---
+const old = migrate({ recipes: [], plan: [{ id: "x", day: 0, recipeId: "r1", servings: 2 }] });
+eq(old.plan[0].slot, "dinner", "plan entries without slot default to dinner");
+eq(Array.isArray(old.prices), true, "migrate adds prices array");
+eq(old.meta.created > 0, true, "migrate stamps a created date");
+
+// --- backup nudge ---
+const realData = data;
+const week = 7 * 864e5;
+globalThis.data = { recipes: [{}], plan: [], prices: [], meta: { created: Date.now() - 3 * week } };
+eq(needsBackupNudge(), true, "nudge after two weeks with no backup");
+data.meta.lastBackup = Date.now() - week;
+eq(needsBackupNudge(), false, "no nudge soon after a backup");
+data.meta.lastBackup = Date.now() - 3 * week;
+eq(needsBackupNudge(), true, "nudge again when backup is stale");
+data.meta.snoozeUntil = Date.now() + week;
+eq(needsBackupNudge(), false, "snooze silences the nudge");
+globalThis.data = { recipes: [], plan: [], prices: [], meta: { created: 0 } };
+eq(needsBackupNudge(), false, "no nudge when there is nothing to lose");
+globalThis.data = realData;
 
 // --- deleted recipe in plan is ignored everywhere ---
 data.plan.push({ id: "m3", day: 2, slot: "dinner", recipeId: "ghost", servings: 2 });

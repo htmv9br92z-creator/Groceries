@@ -220,23 +220,77 @@ const SLOTS = [
   ["snack", "Snack"],
 ];
 
+// Upgrades any older/imported data shape to the current one.
+function migrate(d) {
+  d.checked = d.checked || {};
+  d.prices = d.prices || [];
+  for (const m of d.plan) if (!m.slot) m.slot = "dinner";
+  d.meta = d.meta || {};
+  if (!d.meta.created) d.meta.created = Date.now();
+  return d;
+}
+
 function load() {
-  let d = { recipes: [], plan: [], checked: {}, prices: [] };
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) {
       const p = JSON.parse(raw);
-      if (Array.isArray(p.recipes) && Array.isArray(p.plan)) d = p;
+      if (Array.isArray(p.recipes) && Array.isArray(p.plan)) return migrate(p);
     }
   } catch (e) { /* corrupted storage: fall through to a fresh start */ }
-  d.checked = d.checked || {};
-  d.prices = d.prices || [];
-  for (const m of d.plan) if (!m.slot) m.slot = "dinner";
-  return d;
+  return migrate({ recipes: [], plan: [], checked: {}, prices: [] });
 }
 
 function save() {
-  localStorage.setItem(STORE_KEY, JSON.stringify(data));
+  const json = JSON.stringify(data);
+  localStorage.setItem(STORE_KEY, json);
+  // second on-device copy, in case localStorage is wiped or corrupted
+  if (typeof indexedDB !== "undefined") idbSet(json);
+}
+
+function isEmpty(d) {
+  return !d.recipes.length && !d.plan.length && !d.prices.length;
+}
+
+// --- IndexedDB mirror (best-effort; failures are silently ignored) ---
+const IDB_NAME = "groceries-mirror";
+
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("kv");
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbSet(json) {
+  idbOpen().then((db) => {
+    db.transaction("kv", "readwrite").objectStore("kv").put(json, "data");
+  }).catch(() => {});
+}
+
+function idbGet() {
+  return idbOpen().then((db) => new Promise((resolve, reject) => {
+    const req = db.transaction("kv").objectStore("kv").get("data");
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  })).catch(() => null);
+}
+
+// --- backup reminders ---
+function needsBackupNudge() {
+  if (isEmpty(data)) return false;
+  const m = data.meta || {};
+  if (m.snoozeUntil && Date.now() < m.snoozeUntil) return false;
+  const last = m.lastBackup || m.created || 0;
+  return Date.now() - last > 14 * 864e5;  // two weeks
+}
+
+function snoozeNudge() {
+  data.meta.snoozeUntil = Date.now() + 7 * 864e5;
+  save();
+  render();
 }
 
 function uid() {
@@ -244,6 +298,7 @@ function uid() {
 }
 
 let data = load();
+let restoredFromMirror = false;  // true when boot recovered data from IndexedDB
 let view = "today";
 let editingId = null;       // recipe id when editing, null when creating
 let editingPriceId = null;  // price item id when editing
@@ -521,6 +576,24 @@ function renderToday() {
     { weekday: "long", month: "short", day: "numeric" });
   const todays = data.plan.filter((m) => m.day === d);
   let html = `<div class="sub" style="margin-bottom:12px">${esc(dateLabel)}</div>`;
+
+  if (restoredFromMirror) {
+    html += `<div class="card" style="border-color:var(--accent)">
+      <h3>Data restored</h3>
+      <div class="sub">The phone's main storage came up empty, so your data was restored
+      from the device's automatic second copy. Worth exporting a backup file now.</div>
+      <button class="secondary" onclick="exportData();restoredFromMirror=false;render()">Back up now</button>
+    </div>`;
+  }
+  if (needsBackupNudge()) {
+    html += `<div class="card" style="border-color:var(--accent)">
+      <h3>Time to back up</h3>
+      <div class="sub">It's been a while since your last export. Your data lives only on
+      this phone — one tap saves it to the Files app.</div>
+      <button class="secondary" onclick="exportData();render()">Back up now</button>
+      <button class="ghost" onclick="snoozeNudge()" style="width:100%;margin-top:4px">Remind me in a week</button>
+    </div>`;
+  }
 
   if (!todays.length) {
     html += `<div class="empty"><span class="big">🍽</span>
@@ -984,6 +1057,8 @@ function renderBackup() {
 }
 
 function exportData() {
+  data.meta.lastBackup = Date.now();
+  save();
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -1001,8 +1076,8 @@ function importData(input) {
       const d = JSON.parse(reader.result);
       if (!Array.isArray(d.recipes) || !Array.isArray(d.plan)) throw new Error("bad shape");
       if (!confirm(`Replace everything here with this backup (${d.recipes.length} recipes)?`)) return;
-      data = { recipes: d.recipes, plan: d.plan, checked: d.checked || {}, prices: d.prices || [] };
-      for (const m of data.plan) if (!m.slot) m.slot = "dinner";
+      data = migrate({ recipes: d.recipes, plan: d.plan, checked: d.checked || {},
+                       prices: d.prices || [], meta: d.meta || {} });
       save();
       go("today");
     } catch (e) {
@@ -1024,9 +1099,41 @@ function eraseAll() {
 // ---------- boot ----------
 if (typeof window !== "undefined") {
   render();
+
+  // If main storage came up empty but the IndexedDB mirror has data, restore it.
+  if (isEmpty(data) && typeof indexedDB !== "undefined") {
+    idbGet().then((raw) => {
+      if (!raw) return;
+      try {
+        const p = JSON.parse(raw);
+        if (Array.isArray(p.recipes) && Array.isArray(p.plan) && !isEmpty(p)) {
+          data = migrate(p);
+          save();
+          restoredFromMirror = true;
+          render();
+        }
+      } catch (e) { /* unreadable mirror: ignore */ }
+    });
+  }
+
+  // Ask the browser to treat this origin's storage as persistent (best-effort).
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+
   if ("serviceWorker" in navigator && location.protocol === "https:") {
     navigator.serviceWorker.register("sw.js");
   }
+
+  // After a long suspension, reload to pick up the latest deployed version.
+  // Every change is saved as it happens, so a reload never loses data —
+  // but don't pull the page out from under a half-typed form.
+  let hiddenAt = null;
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (hiddenAt && Date.now() - hiddenAt > 12 * 36e5
+        && view !== "form" && view !== "priceform") {
+      location.reload();
+    }
+  });
 }
 </script>
 </body>
