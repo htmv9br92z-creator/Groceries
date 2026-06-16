@@ -7,6 +7,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Sudoku">
 <meta name="theme-color" content="#D97757">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
 <title>Sudoku</title>
 <style>
 :root {
@@ -796,6 +798,13 @@ document.addEventListener("keydown", e => {
 });
 
 window.addEventListener("beforeunload", save);
+
+// Register the shared service worker so the game is cached for offline play
+// and survives Safari's periodic storage cleanup once added to the Home Screen.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () =>
+    navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
 
 // ---------- Boot ----------
 buildBoard();

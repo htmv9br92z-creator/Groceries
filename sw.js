@@ -1,7 +1,7 @@
 // Network-first service worker: always serves the latest version when online,
 // falls back to the cached copy so the grocery list still opens in the store.
-const CACHE = "groceries-v1";
-const ASSETS = ["./", "./index.html", "./icon.png"];
+const CACHE = "groceries-v2";
+const ASSETS = ["./", "./index.html", "./sudoku.html", "./icon.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
